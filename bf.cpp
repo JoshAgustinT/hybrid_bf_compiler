@@ -602,6 +602,7 @@ void vprint_string_vector(vector<string> list)
 
     cout << endl;
 }
+
 string expr_dict_to_string(map<int, int> dict, int loop_increment)
 {
 
@@ -1053,11 +1054,11 @@ bool is_simple_loop2(vector<string> loop)
         if (t == ">")
             offset++;
         if (t == "<")
-            offset --;
+            offset--;
     }
 
-    if(offset != 0)
-    answer = false;
+    if (offset != 0)
+        answer = false;
 
     return answer;
 }
@@ -1268,6 +1269,107 @@ void test_py()
     Py_Finalize(); // Finalize the Python interpreter
     cout << py_output << endl;
 }
+
+/*
+Sets up the code for python to be able to compute closed form
+sets the 'result' variable in python to the result, could potentially be an infinite loop
+but that should only happen if
+#1 there's a bug in the python code c: , shouldnt be...
+#2 if there's no closed form, which should never happen unless the bf has an infinite loop...
+#3 we messed up the creation of the function to pass in... most likely i think??
+
+Example usage of the python code at bottom
+*/
+void sympy_setup()
+{
+    Py_Initialize(); // Initialize the Python interpreter
+
+    // Define the Python code as a string
+    PyRun_SimpleString(
+        "from random import randint\n"
+        "import sympy\n"
+        "import inspect\n"
+        "\n"
+        "# Generalized function to simulate an arbitrary operation\n"
+        "def simulate_operation(func, *args):\n"
+        "    return func(*args)\n"
+        "\n"
+        "# Generalized polynomial expansion of all possible terms (sympy minimized)\n"
+        "def poly_expression(*variables):\n"
+        "    # Create a polynomial of the form (1 + var + var^2) for each variable\n"
+        "    poly = 1\n"
+        "    for var in variables:\n"
+        "        poly *= (1 + var + var**2)\n"
+        "    return poly\n"
+        "\n"
+        "# Only keep relevant terms (with degree <= 2)\n"
+        "def get_relevant_terms(v):\n"
+        "    v_expanded = v.expand()\n"
+        "    v_terms = []\n"
+        "    for term, coeff in v_expanded.as_coefficients_dict().items():\n"
+        "        if sympy.total_degree(term) <= 2:\n"
+        "            v_terms.append(term)\n"
+        "    return v_terms\n"
+        "\n"
+        "# Compute the closed form of a function with symbolic variables\n"
+        "def compute_closed_form(func):\n"
+        "    # Get the argument names and number of arguments the function expects\n"
+        "    func_signature = inspect.signature(func)\n"
+        "    arg_names = list(func_signature.parameters.keys())\n"
+        "    num_args = len(arg_names)\n"
+        "\n"
+        "    # Dynamically create symbolic variables for each argument\n"
+        "    symbols = sympy.symbols(arg_names)  # Use argument names directly as symbols\n"
+        "\n"
+        "    # Get polynomial and extract relevant terms\n"
+        "    v = poly_expression(*symbols)\n"
+        "    v_terms = get_relevant_terms(v)\n"
+        "    \n"
+        "    # Create coefficient symbols\n"
+        "    coeffs = sympy.symbols(f'c:{len(v_terms)}')\n"
+        "    \n"
+        "    # Final expression with terms and coefficients\n"
+        "    exp = sum(c * t for c, t in zip(coeffs, v_terms))\n"
+        "    \n"
+        "    # Generate random points\n"
+        "    points = [tuple(randint(1, 100) for _ in range(num_args)) for _ in range(len(coeffs))]\n"
+        "    \n"
+        "    results = []\n"
+        "    \n"
+        "    # Solve the equations\n"
+        "    for i, s in enumerate(symbols):\n"
+        "        equations = [exp.subs(dict(zip(symbols, pt))) - simulate_operation(func, *pt)[i] for pt in points]\n"
+        "        sol = sympy.solve(equations, coeffs)\n"
+        "        results.append(f'{s} = {exp.subs(sol)}')\n"
+        "    \n"
+        "    output_string = '\\n'.join(results)\n" // Join results with newlines
+        "    output_string = output_string.replace('\\n', ';')\n"
+        "    output_string = output_string + ';'\n"
+        "    return output_string\n");
+
+    //// EXAMPLE, getting the string back from python
+    // get closed form of a function
+    // PyRun_SimpleString(
+    //     "def sanity_check(p1, p2, p3, p0):\n"
+    //     "    while p0 != 0:\n"
+    //     "        p2 += 1 * p1\n"
+    //     "        p3 += 1 * p1\n"
+    //     "        p1 = 0\n"
+    //     "        p1 += 1 * p2\n"
+    //     "        p2 = 0\n"
+    //     "        p0 -= 1\n"
+    //     "    return p1, p2, p3, p0\n");
+    // PyRun_SimpleString(
+    //     "result = compute_closed_form(sanity_check)\n");
+    // std::string py_output = _getStringFromPython("result");
+
+    // cout << py_output << endl;
+}
+
+void sympy_cleanup()
+{
+    Py_Finalize();
+}
 int main(int argc, char *argv[])
 {
 
@@ -1325,6 +1427,8 @@ int main(int argc, char *argv[])
     */
     asm_setup();
 
+    sympy_setup();
+
     // // doesn't contain user input so let's just do full partial eval!
 
     if (0 && !contains_user_input(program_file))
@@ -1380,11 +1484,26 @@ int main(int argc, char *argv[])
             if (is_simple_loop2(loop))
             {
                 print_string_vector(loop);
-                // list[index] , do                 "[-]>[-]>[-]<<"
+
+                
+                // get closed form
+                PyRun_SimpleString(
+                    "def sanity_check(p1, p2, p3, p0):\n"
+                    "    while p0 != 0:\n"
+                    "        p2 += 1 * p1\n"
+                    "        p3 += 1 * p1\n"
+                    "        p1 = 0\n"
+                    "        p1 += 1 * p2\n"
+                    "        p2 = 0\n"
+                    "        p0 -= 1\n"
+                    "    return p1, p2, p3, p0\n");
+                PyRun_SimpleString(
+                    "result = compute_closed_form(sanity_check)\n");
+                std::string py_output = _getStringFromPython("result");
+
+                cout << py_output << endl;
 
                 // Assuming token is defined and points to the correct index
-    
-                
             }
         }
         // s return 0;
@@ -1410,6 +1529,7 @@ int main(int argc, char *argv[])
     }
 
     asm_cleanup();
+    sympy_setup();
 
     // Close the file
     outFile.close();
