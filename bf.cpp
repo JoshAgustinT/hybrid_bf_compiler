@@ -741,6 +741,36 @@ int get_expr_seek_offset(string expr)
     return offset;
 }
 
+vector<string> get_closed_form_expr_list(string expr)
+{
+    vector<string> list;
+
+    if (expr.compare(0, 12, "closed_form:") == 0)
+    {
+        // Remove the prefix, plus the sign attached
+        expr.erase(0, 12);
+
+        std::string first;
+
+        std::istringstream ss(expr); // Use stringstream for easy tokenization
+
+        while (std::getline(ss, first, ';'))
+        {
+
+            // cout << first  << endl;
+            list.push_back(first);
+
+        } // end while
+    }
+    else
+    {
+        cout << "erm u didnt pass in a closed_form_expr... string... in get_closed_form_expr()" << endl;
+        assert(1 == 0);
+    }
+
+    return list;
+}
+
 /*
 our optimized assembler, usees vector strings to store instructions which allow for easier modification of bf source
 we also further optimize by keeping out tape location at register r13
@@ -925,8 +955,6 @@ void bf_string_assembler(string token)
             string start_label = "start_seek_loop_" + to_string(loop_num);
             string end_label = "end_seek_loop_" + to_string(loop_num);
 
-            // jasm("opt:");
-
             jasm("movb    (%r13), %cl");
             jasm("cmpb    $0, %cl");
 
@@ -998,7 +1026,6 @@ void bf_string_assembler(string token)
             string start_label = "start_seek_loop_" + to_string(loop_num);
             string end_label = "end_seek_loop_" + to_string(loop_num);
 
-            // jasm("opt:");
             //  Load byte into %cl (lower 8 bits)
             jasm("movb    (%r13), %cl");
             // jump to matching end label if 0
@@ -1019,6 +1046,37 @@ void bf_string_assembler(string token)
             jasm(end_label + ":");
         }
     } // end seek
+
+    if (startsWith(token, "closed_form:"))
+    {
+        print_padding();
+        jasm("opt:");
+        vector<string> closed_form = get_closed_form_expr_list(token);
+        cout << "found closed form" << endl;
+        for (auto token : closed_form)
+            cout << token << endl;
+        // our p0 is at %r13
+        // Step 2: Store the result in p3
+
+        jasm("movb 1(%r13), %r15b");
+        jasm("movb %r15b, 1(%r13)");
+
+        jasm("movb $0, 2(%r13)"); 
+
+        jasm("movb (%r13), %r15b"); 
+
+
+        jasm("imul 1(%r13),  %r15");
+
+
+        jasm("movb %r15b, 3(%r13)"); // Store the new value of p1 back
+
+        jasm("movb $0, 0(%r13)"); 
+
+        
+
+
+    }
 } // end asm_string
 
 vector<string> optimize_seek_loop(int loop_index, int seek_offset, vector<string> loop, vector<string> program)
@@ -1370,6 +1428,41 @@ void sympy_cleanup()
 {
     Py_Finalize();
 }
+
+string convert_simple_loop_to_function(vector<string> loop)
+{
+    // Example loop
+    //[>expr_simple:-0:-1,1:1,2:1,        >expr_simple:--1:1,0:-1,     <<-]
+    // should turn into:
+    string example = "def sanity_check(p1, p2, p3, p0):\n"
+                     "    while p0 != 0:\n"
+                     "        p2 += 1 * p1\n"
+                     "        p3 += 1 * p1\n"
+                     "        p1 = 0\n"
+                     "        p1 += 1 * p2\n"
+                     "        p2 = 0\n"
+                     "        p0 -= 1\n"
+                     "    return p1, p2, p3, p0\n";
+
+    for (auto token : loop)
+    {
+    }
+
+    return example;
+}
+
+vector<string> optimize_closed_form(int loop_index, string new_loop, vector<string> loop, vector<string> program)
+{
+
+    for (int i = 0; i < loop.size(); i++)
+    {
+        program[loop_index + i] = " ";
+    }
+    program[loop_index] = new_loop;
+
+    return program;
+}
+
 int main(int argc, char *argv[])
 {
 
@@ -1484,26 +1577,24 @@ int main(int argc, char *argv[])
             if (is_simple_loop2(loop))
             {
                 print_string_vector(loop);
+                // print_string_vector(optimized_program);
 
-                
-                // get closed form
-                PyRun_SimpleString(
-                    "def sanity_check(p1, p2, p3, p0):\n"
-                    "    while p0 != 0:\n"
-                    "        p2 += 1 * p1\n"
-                    "        p3 += 1 * p1\n"
-                    "        p1 = 0\n"
-                    "        p1 += 1 * p2\n"
-                    "        p2 = 0\n"
-                    "        p0 -= 1\n"
-                    "    return p1, p2, p3, p0\n");
-                PyRun_SimpleString(
-                    "result = compute_closed_form(sanity_check)\n");
+                string function_string = convert_simple_loop_to_function(loop);
+                // pass as const char string
+                PyRun_SimpleString(function_string.c_str());
+
+                // call based on the name of the method
+                PyRun_SimpleString("result = compute_closed_form(sanity_check)\n");
                 std::string py_output = _getStringFromPython("result");
 
-                cout << py_output << endl;
+                string new_loop = "closed_form:" + py_output;
 
-                // Assuming token is defined and points to the correct index
+                optimized_program = optimize_closed_form(token, new_loop, loop, optimized_program);
+
+                cout << endl;
+                print_string_vector(optimized_program);
+                cout << endl;
+                //  Assuming token is defined and points to the correct index
             }
         }
         // s return 0;
