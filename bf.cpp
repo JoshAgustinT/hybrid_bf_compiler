@@ -13,6 +13,7 @@ written for adv compilers course
 #include <unordered_set>
 #include <sstream>
 #include <cassert>
+#include <regex>
 #include <Python.h>
 
 using namespace std;
@@ -772,6 +773,78 @@ vector<string> get_closed_form_expr_list(string expr)
 }
 
 /*
+get X from pX or p_X , where X is some number/numbers
+return X, or -X if _X
+*/
+string p_get_offset(string pX)
+{
+
+    // Determine the starting index for extracting the number
+    int start_index = (pX[1] == '_') ? 2 : 1;
+
+    // Extract the numeric part from the string
+    std::string number_str = pX.substr(start_index);
+    int number;
+
+    // Convert the string to an integer
+    std::stringstream ss(number_str);
+    ss >> number;
+    number *= 1;
+
+    // Return the number, negating it if the second character is '_'
+    return (pX[1] == '_') ? to_string(-number) : to_string(number);
+}
+
+std::vector<std::string> separate_terms(const std::string &input)
+{
+    std::regex regex("([+-]?[^+-]+)");
+    std::vector<std::string> terms(
+        std::sregex_token_iterator(input.begin(), input.end(), regex),
+        std::sregex_token_iterator());
+    return terms;
+}
+
+bool is_number(const std::string &str)
+{
+
+    size_t start = 0;
+
+    // Check for optional leading sign
+    if (str[0] == '+' || str[0] == '-')
+    {
+        start = 1; // Start checking from the next character
+    }
+
+    // Check if all remaining characters are digits
+    for (size_t i = start; i < str.length(); ++i)
+    {
+        if (!std::isdigit(str[i]) && str[i] != ' ')
+        {
+            return false; // Found a non-digit character
+        }
+    }
+
+    return true; // All characters are valid digits
+}
+
+std::string remove_whitespace(const std::string &str)
+{
+    std::string result; // Create a new string to store the result
+
+    // Iterate through each character in the original string
+    for (char ch : str)
+    {
+        // If the character is not a whitespace, add it to the result
+        if (!std::isspace(static_cast<unsigned char>(ch)))
+        {
+            result += ch; // Concatenate non-whitespace characters
+        }
+    }
+
+    return result; // Return the modified string
+}
+
+/*
 our optimized assembler, usees vector strings to store instructions which allow for easier modification of bf source
 we also further optimize by keeping out tape location at register r13
 */
@@ -780,52 +853,29 @@ void bf_string_assembler(string token)
     // print_padding();
 
     if (token == ">")
-    {
-
         // add one to pointer address
         jasm("addq    $1, %r13");
-    }
     if (token == "<")
-    {
-
         // remove one from pointer address
         jasm("addq    $-1, %r13");
-    }
     if (token == "+")
-    {
-
-        // Load current cell byte into %cl (lower 8 bits)
-        jasm("movb    (%r13), %cl");
-
         // Add 1 to the byte
-        jasm("addb    $1, %cl");
+        jasm("addb    $1, (%r13)");
 
-        // Store the modified byte back to the address in %r13, our current cell
-        jasm("movb    %cl, (%r13)");
-    }
     if (token == "-")
-    {
+        jasm("subb    $1, (%r13)");
 
-        // Load byte into %cl (lower 8 bits)
-        jasm("movb    (%r13), %cl");
-
-        // Decrrement byte in %cl
-        jasm("subb    $1, %cl");
-
-        // Store the modified byte back to the address in %r13, our current cell
-        jasm("movb    %cl, (%r13)");
-    }
     if (token == ".")
     {
 
         // Load the byte from the address into %al (to use with putc)
-        jasm("movb    (%r13), %al");
+        //jasm("movb    (%r13), %al");
 
         // Prepare for putc
         // Load file descriptor for stdout into %rsi
         jasm("movq    stdout(%rip), %rsi");
         // Move and sign-extend byte in %al to %edi
-        jasm("movsbl  %al, %edi");
+        jasm("movsbl  (%r13), %edi");
 
         // Call putc to print the character
         jasm("call    putc@PLT");
@@ -841,14 +891,10 @@ void bf_string_assembler(string token)
         // Call the getc function to read a character from stdin (returned in %al)
         jasm("call    getc@PLT");
         // Move the byte from %al into %bl
-        jasm("movb    %al, %bl");
 
         // Store the byte from %bl into r13 our current cell
-        jasm("movb    %bl, (%r13)");
+        jasm("movb    %al, (%r13)");
 
-        // char nextByte;
-        // cin.get(nextByte);
-        // tape[tape_position] = nextByte;
     }
     if (token == "[")
     {
@@ -857,13 +903,10 @@ void bf_string_assembler(string token)
         myStack.push(loop_num);
 
         string start_label = "start_loop_" + to_string(loop_num);
-
         string end_label = "end_loop_" + to_string(loop_num);
 
-        // Load byte into %cl (lower 8 bits)
-        jasm("movb    (%r13), %cl");
         // jump to matching end label if 0
-        jasm("cmpb    $0, %cl");
+        jasm("cmpb    $0, (%r13)");
         jasm("je      " + end_label);
         jasm(start_label + ":");
     }
@@ -873,14 +916,9 @@ void bf_string_assembler(string token)
         myStack.pop();
         string start_label = "start_loop_" + to_string(match_loop);
         string end_label = "end_loop_" + to_string(match_loop);
-        // Load the pointer from -8(%rbp) into %rax
-        // jasm("movq    -8(%rbp), %rax");
-
-        // Load byte into %cl (lower 8 bits)
-        jasm("movb    (%r13), %cl");
 
         // jump to matching start label if not 0
-        jasm("cmpb    $0, %cl");
+        jasm("cmpb    $0, (%r13)");
         jasm("jne      " + start_label);
         jasm(end_label + ":");
     }
@@ -954,8 +992,8 @@ void bf_string_assembler(string token)
             string start_label = "start_seek_loop_" + to_string(loop_num);
             string end_label = "end_seek_loop_" + to_string(loop_num);
 
-            jasm("movb    (%r13), %cl");
-            jasm("cmpb    $0, %cl");
+            //jasm("movb    (%r13), %cl");
+            jasm("cmpb    $0, (%r13)");
 
             jasm("je      " + end_label);
 
@@ -1048,28 +1086,172 @@ void bf_string_assembler(string token)
 
     if (startsWith(token, "closed_form:"))
     {
+        // p2 = 0
+        // p4 = p0 + p4
+        // p0 = 0
+
+        loop_num++;
+        myStack.push(loop_num);
+
+        string start_label = "start_loop_" + to_string(loop_num);
+
+        string end_label = "end_loop_" + to_string(loop_num);
+
+        // jump to matching end label if 0
+        jasm("cmpb    $0, (%r13)");
+        jasm("je      " + end_label);
+        jasm(start_label + ":");
+
+       
+        // SETUP
+        // Initialize the available registers
+        std::vector<std::string> availableRegisters = {"%r8", "%r9", "%r10", "%r11", "%r12", "%r14", "%r15"};
+        std::unordered_map<std::string, std::string> registerMap; // Maps a string to a register
+
+        // Function to insert a mapping
+        auto insert = [&](const std::string &key)
+        {
+            if (availableRegisters.empty())
+            {
+                std::cerr << "No available registers left!\n";
+                return;
+            }
+            // Map the key to the first available register
+            registerMap[key] = availableRegisters.back();
+            availableRegisters.pop_back(); // Remove the assigned register from the list
+        };
+
+        // Function to get the mapped register for a given key
+        auto get = [&](const std::string &key) -> std::string
+        {
+            if (registerMap.find(key) != registerMap.end())
+            {
+                return registerMap[key];
+            }
+            else{
+
+                cout<< "Error in mapping registers."<<endl;
+                assert(1==0);
+            }
+
+
+            return "Not mapped"; // Return a default value if the key is not found
+        };
+
+        // END SETUP
+
         print_padding();
-        // jasm("opt:");
+        //
         vector<string> closed_form = get_closed_form_expr_list(token);
-        cout << "found closed form" << endl;
+
+        cout << "Found closed form: " << endl;
+        // just print the closed form
         for (auto token : closed_form)
             cout << token << endl;
-        // our p0 is at %r13
-        // Step 2: Store the result in p3
 
-        jasm("movb 1(%r13), %r15b");
-        jasm("movb %r15b, 1(%r13)");
+        // jasm("opt: ");
+        //  save old variables
+        for (auto token : closed_form)
+        {
+            size_t pos = token.find('=');
 
-        jasm("movb $0, 2(%r13)");
+            std::string left = token.substr(0, pos);
+            // //trim whitespace
+            left.erase(0, left.find_first_not_of(" \t"));
 
-        jasm("movb (%r13), %r15b");
+            string offset = p_get_offset(left);
 
-        jasm("imul 1(%r13),  %r15");
+            insert(offset + "(%r13)");
 
-        jasm("movb %r15b, 3(%r13)"); // Store the new value of p1 back
+            cout << offset + "(%r13)  : " << get(offset + "(%r13)") << endl;
 
-        jasm("movb $0, 0(%r13)");
-    }
+            // save old variables on some place in stack that's easy to map to
+            jasm("movq " + offset + "(%r13)," + get(offset + "(%r13)"));
+
+        } // end saving old values loop
+
+        // set the variables
+        for (auto token : closed_form)
+        {
+            size_t pos = token.find('=');
+
+            std::string left = token.substr(0, pos);
+            std::string right = token.substr(pos + 1);
+
+            // //trim whitespace
+            left.erase(0, left.find_first_not_of(" \t"));
+            right.erase(0, right.find_first_not_of(" \t"));
+
+            string offset = p_get_offset(left);
+
+            // reset our value
+
+            jasm("movb $0, " + offset + "(%r13)");
+
+            // add each part of the expr
+            right; // string
+
+            // split expression into parts
+            vector<string> operations = separate_terms(right);
+
+            for (auto token : operations)
+            {
+                // cout << token <<endl;
+                if (is_number(token))
+                {
+
+                    string op = remove_whitespace(token);
+                    cout << op << " : is_number " << endl;
+                    jasm("addb  $" + op + "," + offset + "(%r13)");
+                }
+
+                else if (token[0] == '+')
+                {
+                    cout << token << " : + pX : ";
+                    string op = remove_whitespace(token.substr(1));
+                    string op_index = p_get_offset(op);
+
+                    cout << op_index << endl;
+                    jasm("addb " + get(op_index + "(%r13)") + "b, " + offset + "(%r13)");
+                }
+
+                else if (token[0] == '-')
+                {
+                    cout << token << " : + pX : ";
+                    string op = remove_whitespace(token.substr(1));
+                    string op_index = p_get_offset(op);
+
+                    cout << op_index << endl;
+                    jasm("subb " + get(op_index + "(%r13)") + "b, " + offset + "(%r13)");
+                }
+
+                else
+                {
+                    cout << token << " : pX : ";
+                    string op_index = p_get_offset(token);
+                    cout << op_index << endl;
+
+                    jasm("addb " + get(op_index + "(%r13)") + "b, " + offset + "(%r13)");
+                }
+
+                // cout << token << endl;
+            }
+
+        } // end saving old values loop
+        print_padding();
+
+         int match_loop = myStack.top();
+        myStack.pop();
+         start_label = "start_loop_" + to_string(match_loop);
+         end_label = "end_loop_" + to_string(match_loop);
+
+
+        // jump to matching start label if not 0
+        jasm("cmpb    $0, (%r13)");
+        jasm("jne      " + start_label);
+        jasm(end_label + ":");
+
+    } // end closed_expr
 } // end asm_string
 
 vector<string> optimize_seek_loop(int loop_index, int seek_offset, vector<string> loop, vector<string> program)
@@ -1520,6 +1702,9 @@ string convert_simple_loop_to_function(vector<string> loop)
     string def = "def sanity_check(" + print_s_set(terms) + "):\n";
     string ret = "    return " + print_s_set(terms) + "\n";
 
+
+    if(terms.size() > 7)
+    return "NONE";
     // cout<< (def + body + ret) <<endl;
     // return example
     return (def + body + ret);
@@ -1659,39 +1844,48 @@ int main(int argc, char *argv[])
             //  so we can optimize this loop variable and then just plug it back in
             vector<string> loop = get_loop_string(token, optimized_program);
 
-            if (is_simple_loop2(loop))
+            if (is_simple_loop2(loop) )
             {
-                //vprint_string_vector(loop);
+                // vprint_string_vector(loop);
 
-                if (loop.size() > 50)
-                    continue;
+                //  if (loop.size() > 100)
+                //      continue;
                 // print_string_vector(optimized_program);
 
-                //loop as a function
+                // loop as a function
                 string function_string = convert_simple_loop_to_function(loop);
 
-                //declare function in python
+                //we had more than 7 terms... too much
+                if(function_string == "NONE")
+                continue;
+                // declare function in pyth     on
                 PyRun_SimpleString(function_string.c_str());
-
+                print_string_vector(loop);
                 // compute closed form in py
                 PyRun_SimpleString("result = compute_closed_form(sanity_check)\n");
-                //extract answer as string to c++
+                // extract answer as string to c++
                 std::string py_output = _getStringFromPython("result");
-
-                //encoding to pass to assembler
+                // encoding to pass to assembler
                 string new_loop = "closed_form:" + py_output;
 
-                //lets start with additions only...
+                cout << new_loop << endl
+                      << endl;
+
+                // lets start with additions only...
                 if (!string_contains_multiply(new_loop))
                 {
-
+                    //print_string_vector(optimized_program);
+                    //cout << endl;
                     optimized_program = optimize_closed_form(token, new_loop, loop, optimized_program);
-                    //cout <<" NEW LOOP: "<< new_loop << endl;
+                    
+                    
                 }
 
                 //  Assuming token is defined and points to the correct index
             }
-        }
+        } // end indices loop
+
+        // print_string_vector(optimized_program);
 
         // output the assembly
         for (int i = 0; i < optimized_program.size(); i++)
