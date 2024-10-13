@@ -1142,10 +1142,10 @@ void bf_string_assembler(string token)
         //
         vector<string> closed_form = get_closed_form_expr_list(token);
 
-        cout << "Found closed form: " << endl;
+        //cout << "Found closed form: " << endl;
         // just print the closed form
-        for (auto token : closed_form)
-            cout << token << endl;
+        // for (auto token : closed_form)
+        //     cout << token << endl;
 
         // jasm("opt: ");
         //  save old variables
@@ -1161,7 +1161,8 @@ void bf_string_assembler(string token)
 
             insert(offset + "(%r13)");
 
-            cout << offset + "(%r13)  : " << get(offset + "(%r13)") << endl;
+            // print map
+            //cout << offset + "(%r13)  : " << get(offset + "(%r13)") << endl;
 
             // save old variables on some place in stack that's easy to map to
             jasm("movq " + offset + "(%r13)," + get(offset + "(%r13)"));
@@ -1199,35 +1200,35 @@ void bf_string_assembler(string token)
                 {
 
                     string op = remove_whitespace(token);
-                    cout << op << " : is_number " << endl;
+                   // cout << op << " : is_number " << endl;
                     jasm("addb  $" + op + "," + offset + "(%r13)");
                 }
 
                 else if (token[0] == '+')
                 {
-                    cout << token << " : + pX : ";
+                   // cout << token << " : + pX : ";
                     string op = remove_whitespace(token.substr(1));
                     string op_index = p_get_offset(op);
 
-                    cout << op_index << endl;
+                    //cout << op_index << endl;
                     jasm("addb " + get(op_index + "(%r13)") + "b, " + offset + "(%r13)");
                 }
 
                 else if (token[0] == '-')
                 {
-                    cout << token << " : + pX : ";
+                   // cout << token << " : + pX : ";
                     string op = remove_whitespace(token.substr(1));
                     string op_index = p_get_offset(op);
 
-                    cout << op_index << endl;
+                   // cout << op_index << endl;
                     jasm("subb " + get(op_index + "(%r13)") + "b, " + offset + "(%r13)");
                 }
 
                 else
                 {
-                    cout << token << " : pX : ";
+                   // cout << token << " : pX : ";
                     string op_index = p_get_offset(token);
-                    cout << op_index << endl;
+                    //cout << op_index << endl;
 
                     jasm("addb " + get(op_index + "(%r13)") + "b, " + offset + "(%r13)");
                 }
@@ -1856,7 +1857,7 @@ int main(int argc, char *argv[])
             //  so we can optimize this loop variable and then just plug it back in
             vector<string> loop = get_loop_string(token, optimized_program);
 
-            if (is_simple_loop2(loop))
+            if (is_simple_loop2(loop) )
             {
                 // vprint_string_vector(loop);
 
@@ -1868,13 +1869,18 @@ int main(int argc, char *argv[])
                 string function_string = convert_simple_loop_to_function(loop);
 
                 // we had more than 7 terms... too much
-                if (function_string == "NONE")
-                    continue;
+                if (function_string == "NONE"){
+                    
+
+                //cout<<endl<<endl<<endl<<endl<<"MORE REG OPPORTUNITY"<<endl;
+                continue;
+                }
                 // declare function in pyth     on
                 PyRun_SimpleString(function_string.c_str());
+                //print original loop
                 print_string_vector(loop);
 
-                // print function that we'll be passing
+                // print loop as a function
                 // cout << function_string << endl;
                 //  compute closed form in py
                 PyRun_SimpleString("result = compute_closed_form(sanity_check)\n");
@@ -1883,14 +1889,16 @@ int main(int argc, char *argv[])
                 // encoding to pass to assembler
                 string new_loop = "closed_form:" + py_output;
 
-                cout << new_loop << endl
-                     << endl;
+
+                //print closed form we computed
+                cout << new_loop << endl<<endl;
 
                 // lets start with additions only...
                 if (!string_contains_multiply(new_loop))
                 {
                     // print_string_vector(optimized_program);
                     // cout << endl;
+                    
                     optimized_program = optimize_closed_form(token, new_loop, loop, optimized_program);
                 }
 
