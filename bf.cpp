@@ -869,7 +869,7 @@ void bf_string_assembler(string token)
     {
 
         // Load the byte from the address into %al (to use with putc)
-        //jasm("movb    (%r13), %al");
+        // jasm("movb    (%r13), %al");
 
         // Prepare for putc
         // Load file descriptor for stdout into %rsi
@@ -894,7 +894,6 @@ void bf_string_assembler(string token)
 
         // Store the byte from %bl into r13 our current cell
         jasm("movb    %al, (%r13)");
-
     }
     if (token == "[")
     {
@@ -992,7 +991,7 @@ void bf_string_assembler(string token)
             string start_label = "start_seek_loop_" + to_string(loop_num);
             string end_label = "end_seek_loop_" + to_string(loop_num);
 
-            //jasm("movb    (%r13), %cl");
+            // jasm("movb    (%r13), %cl");
             jasm("cmpb    $0, (%r13)");
 
             jasm("je      " + end_label);
@@ -1102,7 +1101,6 @@ void bf_string_assembler(string token)
         jasm("je      " + end_label);
         jasm(start_label + ":");
 
-       
         // SETUP
         // Initialize the available registers
         std::vector<std::string> availableRegisters = {"%r8", "%r9", "%r10", "%r11", "%r12", "%r14", "%r15"};
@@ -1128,12 +1126,12 @@ void bf_string_assembler(string token)
             {
                 return registerMap[key];
             }
-            else{
+            else
+            {
 
-                cout<< "Error in mapping registers."<<endl;
-                assert(1==0);
+                cout << "Error in mapping registers." << endl;
+                assert(1 == 0);
             }
-
 
             return "Not mapped"; // Return a default value if the key is not found
         };
@@ -1240,11 +1238,10 @@ void bf_string_assembler(string token)
         } // end saving old values loop
         print_padding();
 
-         int match_loop = myStack.top();
+        int match_loop = myStack.top();
         myStack.pop();
-         start_label = "start_loop_" + to_string(match_loop);
-         end_label = "end_loop_" + to_string(match_loop);
-
+        start_label = "start_loop_" + to_string(match_loop);
+        end_label = "end_loop_" + to_string(match_loop);
 
         // jump to matching start label if not 0
         jasm("cmpb    $0, (%r13)");
@@ -1271,6 +1268,8 @@ bool is_simple_loop2(vector<string> loop)
 {
     bool answer = true;
     int offset = 0;
+
+    int loop_cell_value = 0;
     // we do not count the brackets only inside ie [...]
     for (int i = 1; i < loop.size() - 1; i++)
     {
@@ -1288,9 +1287,23 @@ bool is_simple_loop2(vector<string> loop)
             offset++;
         if (t == "<")
             offset--;
+        if (t == "+")
+        {
+            if (offset == 0)
+                loop_cell_value++;
+        }
+
+        if (t == "-")
+        {
+            if (offset == 0)
+                loop_cell_value--;
+        }
     }
 
     if (offset != 0)
+        answer = false;
+
+    if (abs(loop_cell_value) != 1)
         answer = false;
 
     return answer;
@@ -1702,9 +1715,8 @@ string convert_simple_loop_to_function(vector<string> loop)
     string def = "def sanity_check(" + print_s_set(terms) + "):\n";
     string ret = "    return " + print_s_set(terms) + "\n";
 
-
-    if(terms.size() > 7)
-    return "NONE";
+    if (terms.size() > 7)
+        return "NONE";
     // cout<< (def + body + ret) <<endl;
     // return example
     return (def + body + ret);
@@ -1844,7 +1856,7 @@ int main(int argc, char *argv[])
             //  so we can optimize this loop variable and then just plug it back in
             vector<string> loop = get_loop_string(token, optimized_program);
 
-            if (is_simple_loop2(loop) )
+            if (is_simple_loop2(loop))
             {
                 // vprint_string_vector(loop);
 
@@ -1855,13 +1867,16 @@ int main(int argc, char *argv[])
                 // loop as a function
                 string function_string = convert_simple_loop_to_function(loop);
 
-                //we had more than 7 terms... too much
-                if(function_string == "NONE")
-                continue;
+                // we had more than 7 terms... too much
+                if (function_string == "NONE")
+                    continue;
                 // declare function in pyth     on
                 PyRun_SimpleString(function_string.c_str());
                 print_string_vector(loop);
-                // compute closed form in py
+
+                // print function that we'll be passing
+                // cout << function_string << endl;
+                //  compute closed form in py
                 PyRun_SimpleString("result = compute_closed_form(sanity_check)\n");
                 // extract answer as string to c++
                 std::string py_output = _getStringFromPython("result");
@@ -1869,16 +1884,14 @@ int main(int argc, char *argv[])
                 string new_loop = "closed_form:" + py_output;
 
                 cout << new_loop << endl
-                      << endl;
+                     << endl;
 
                 // lets start with additions only...
                 if (!string_contains_multiply(new_loop))
                 {
-                    //print_string_vector(optimized_program);
-                    //cout << endl;
+                    // print_string_vector(optimized_program);
+                    // cout << endl;
                     optimized_program = optimize_closed_form(token, new_loop, loop, optimized_program);
-                    
-                    
                 }
 
                 //  Assuming token is defined and points to the correct index
