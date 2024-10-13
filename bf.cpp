@@ -887,7 +887,6 @@ void bf_string_assembler(string token)
 
     if (startsWith(token, "expr_simple:"))
     {
-        // jasm("opt:");
         string sign_of_loop;
 
         // if +, we perform loop 256-255 times
@@ -1050,7 +1049,7 @@ void bf_string_assembler(string token)
     if (startsWith(token, "closed_form:"))
     {
         print_padding();
-        jasm("opt:");
+        // jasm("opt:");
         vector<string> closed_form = get_closed_form_expr_list(token);
         cout << "found closed form" << endl;
         for (auto token : closed_form)
@@ -1061,21 +1060,15 @@ void bf_string_assembler(string token)
         jasm("movb 1(%r13), %r15b");
         jasm("movb %r15b, 1(%r13)");
 
-        jasm("movb $0, 2(%r13)"); 
+        jasm("movb $0, 2(%r13)");
 
-        jasm("movb (%r13), %r15b"); 
-
+        jasm("movb (%r13), %r15b");
 
         jasm("imul 1(%r13),  %r15");
 
-
         jasm("movb %r15b, 3(%r13)"); // Store the new value of p1 back
 
-        jasm("movb $0, 0(%r13)"); 
-
-        
-
-
+        jasm("movb $0, 0(%r13)");
     }
 } // end asm_string
 
@@ -1429,6 +1422,34 @@ void sympy_cleanup()
     Py_Finalize();
 }
 
+// returns string 'pX', where X is what's passed ie p(3) returns p3
+string p(int val)
+{
+    string val_string;
+    if (val >= 0)
+        val_string = to_string(val);
+    else
+        val_string = "_" + to_string(abs(val));
+
+    return "p" + val_string;
+}
+
+/*
+takes set of strings
+ie "p0,p1,p2"
+*/
+string print_s_set(unordered_set<string> set)
+{
+    string str = "";
+    for (auto token : set)
+    {
+        str += token;
+        str += ",";
+    }
+
+    str.pop_back();
+    return str;
+}
 string convert_simple_loop_to_function(vector<string> loop)
 {
     // Example loop
@@ -1444,11 +1465,64 @@ string convert_simple_loop_to_function(vector<string> loop)
                      "        p0 -= 1\n"
                      "    return p1, p2, p3, p0\n";
 
+    unordered_set<string> terms;
+    string body = "    while p0 != 0:\n";
+
+    int offset = 0;
+
+    //[>expr_simple:-0:-1,1:1,2:1,        >expr_simple:--1:1,0:-1,     <<-]
     for (auto token : loop)
     {
+        if (startsWith(token, "expr_simple:"))
+        {
+            map<int, int> simple_loop = expr_string_to_dict(token);
+            for (const auto &pair : simple_loop)
+            {
+                if (pair.first == 0)
+                    continue;
+
+                to_string(pair.first);
+                to_string(pair.second);
+                int index = pair.first + offset;
+                body += "        " + p(index) + "+= " + to_string(pair.second) + " * " + p(offset) + "\n";
+                terms.insert(p(index));
+                terms.insert(p(offset));
+            }
+            // zero out at end of loop
+            body += "        " + p(offset) + " = 0\n";
+
+            terms.insert(p(offset));
+        }
+
+        if (token == ">")
+            offset++;
+        if (token == "<")
+            offset--;
+        if (token == "-")
+        {
+            body += "        " + p(offset) + "-= 1\n";
+            terms.insert(p(offset));
+        }
+        if (token == "+")
+        {
+            body += "        " + p(offset) + "+= 1\n";
+            terms.insert(p(offset));
+        }
+
+    } // end for loop
+
+    if (offset != 0)
+    {
+        cout << "somehow u broke the function maker.." << endl;
+        assert(1 == 0);
     }
 
-    return example;
+    string def = "def sanity_check(" + print_s_set(terms) + "):\n";
+    string ret = "    return " + print_s_set(terms) + "\n";
+
+    // cout<< (def + body + ret) <<endl;
+    // return example
+    return (def + body + ret);
 }
 
 vector<string> optimize_closed_form(int loop_index, string new_loop, vector<string> loop, vector<string> program)
@@ -1463,6 +1537,17 @@ vector<string> optimize_closed_form(int loop_index, string new_loop, vector<stri
     return program;
 }
 
+bool string_contains_multiply(string str)
+{
+
+    bool answer = false;
+    for (auto token : str)
+    {
+        if (token == '*')
+            answer = true;
+    }
+    return answer;
+}
 int main(int argc, char *argv[])
 {
 
@@ -1576,28 +1661,37 @@ int main(int argc, char *argv[])
 
             if (is_simple_loop2(loop))
             {
-                print_string_vector(loop);
+                //vprint_string_vector(loop);
+
+                if (loop.size() > 50)
+                    continue;
                 // print_string_vector(optimized_program);
 
+                //loop as a function
                 string function_string = convert_simple_loop_to_function(loop);
-                // pass as const char string
+
+                //declare function in python
                 PyRun_SimpleString(function_string.c_str());
 
-                // call based on the name of the method
+                // compute closed form in py
                 PyRun_SimpleString("result = compute_closed_form(sanity_check)\n");
+                //extract answer as string to c++
                 std::string py_output = _getStringFromPython("result");
 
+                //encoding to pass to assembler
                 string new_loop = "closed_form:" + py_output;
 
-                optimized_program = optimize_closed_form(token, new_loop, loop, optimized_program);
+                //lets start with additions only...
+                if (!string_contains_multiply(new_loop))
+                {
 
-                cout << endl;
-                print_string_vector(optimized_program);
-                cout << endl;
+                    optimized_program = optimize_closed_form(token, new_loop, loop, optimized_program);
+                    //cout <<" NEW LOOP: "<< new_loop << endl;
+                }
+
                 //  Assuming token is defined and points to the correct index
             }
         }
-        // s return 0;
 
         // output the assembly
         for (int i = 0; i < optimized_program.size(); i++)
