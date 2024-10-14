@@ -9,7 +9,7 @@ Testing methodology:
     Ran a makefile command that compiled the bf compiler, then each bf program in the benches folder was passed to the compiler, linked, and executed with the 'time ./a.out > /dev/null' command.
 
     Two runs, one with second order loop optimization pass OFF, and one with it ON.
-
+---
 RESULTS:
 
 Output with second order loop optimization OFF:
@@ -78,20 +78,25 @@ Output with second order loop optimization ON:
     twinkle.b
     0.00user 0.00system 0:00.00elapsed 87%CPU (0avgtext+0avgdata 1352maxresident)k
 
-Results, we can see that the compiler was already pretty fast with our first loop optimization.
+---
+
+We can see that the compiler was already pretty fast with our first loop optimization.
 
 Most results were marginally faster with the second order loop optimization ie .75s vs .78s for mandel.b.
 It may seem insignificant but it was consitently faster throughout the runs. It seems we got a pretty good run with low
-interference to get .78s without the second order loop opt, because it's usually around .8-.9s. My guess would be that the program uses a lot loops which are only executed a few times so the optimization wasn't as helpful.
+interference to get .78s without the second order loop opt, because it's usually around .8-.9s. My guess would be that the program uses a lot of loops which are only executed a few times so the optimization didn't lead to big speedups.
 
 
 However, hanoi.b got an insane speedup! My optimization pass made it ~38x faster! c:
 
 I spent some time trying to stretch the kind of loops I could find closed forms for and found that many of the loops don't need to be restricted to the +-1 loop iterations. If we remove that restriction there's a bunch more loops we can replace with closed form. However, doing that extends compilation time a TON, since there's all these closed forms which are being computed and the final executable seems to be marginally slower. Probably the same issue as mandel.b, where the loops weren't being run enough times for them to make a difference. Some tests also stalled when doing this, presumably because a closed form wasn't computable and got stuck in an infinite loop trying to calculate it. So our second order loop definition remains the same as our simple loop definition except we also allow optimized simple loops inside it.
 
+---
+
 Closed forms of hanoi.b when second order loop MUST iterate +-1 
 
 Compile time   =  0m6.124s
+
 Execution time =  0m0.019s
 
     [>expr_simple:-0:-1,  ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++expr_simple:-0:-1,  <-]
@@ -108,13 +113,15 @@ Execution time =  0m0.019s
 Closed forms of hanoi.b when second order loop doesn't have an iteration offset restriction
 
 Compile time =   1m3.088s
+
 Execution time =  0m0.023s
-output: (proof it works c:)
+
+output: (proof it works with all the closed forms c:)
 
 ![image](https://github.com/user-attachments/assets/1e1c3713-4a4f-4a8e-9f87-9822c9623c59)
 
 All the simplified loops it optimizied from this point forward
----
+
 
             [expr_simple:--1:1,0:-1,     <<<expr_simple:-0:-1,  +>>>]
             closed_form:p_3 = 1;p0 = 0;p_1 = p0 + p_1;
