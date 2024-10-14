@@ -111,29 +111,7 @@ Compile time =   1m3.088s
 Execution time =  0m0.023s
 output: (proof it works c:)
 
-real    0m0.024s          Towers of Hanoi in Brainf*ck
-user    0m0.016sitten by Clifford Wolf <http://www.clifford.at/bfcpu/>
-sys     0m0.008s
-josh@DESKTOP-AM3HT41:~/school/compilers/eval_compiler$    xXx
-                                                        xXXXXXx
-                                                      xXXXXXXXXXx
-                                                    xXXXXXXXXXXXXXx
-                                                  xXXXXXXXXXXXXXXXXXx
-                                                xXXXXXXXXXXXXXXXXXXXXXx
-                                              xXXXXXXXXXXXXXXXXXXXXXXXXXx
-                                            xXXXXXXXXXXXXXXXXXXXXXXXXXXXXXx
-                                          xXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXx
-  -----------------------------------     -----------------------------------
-
-                                         
-                                           
-                                             
-                                               
-                                                 
-                                                   
-                                                     
-                                                       
-                      -----------------------------------
+![image](https://github.com/user-attachments/assets/1e1c3713-4a4f-4a8e-9f87-9822c9623c59)
 
 All the simplified loops it optimizied from this point forward
 ---
