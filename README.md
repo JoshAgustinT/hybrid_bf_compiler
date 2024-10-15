@@ -116,7 +116,7 @@ Compile time =   1m3.088s
 
 Execution time =  0m0.023s
 
-output: (proof it works with all the closed forms c:)
+sample output:
 
 ![image](https://github.com/user-attachments/assets/1e1c3713-4a4f-4a8e-9f87-9822c9623c59)
 
