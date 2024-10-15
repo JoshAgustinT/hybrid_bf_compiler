@@ -120,9 +120,6 @@ sample output:
 
 ![image](https://github.com/user-attachments/assets/1e1c3713-4a4f-4a8e-9f87-9822c9623c59)
 
-All the simplified loops it optimizied from this point forward
-
-
             [expr_simple:--1:1,0:-1,     <<<expr_simple:-0:-1,  +>>>]
             closed_form:p_3 = 1;p0 = 0;p_1 = p0 + p_1;
 
